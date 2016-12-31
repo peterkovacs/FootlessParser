@@ -85,6 +85,53 @@ class StringParser_Tests: XCTestCase {
         assertParseFails(parser, "b")
         assertParseFails(parser, "")
     }
+
+    func testRepresentable() {
+        enum Foo: String {
+            case foo, bar, baz
+            static let allValues: [Foo] = [ .foo, .bar, .baz ]
+        }
+
+        let parser: Parser<Character,Foo> = anyOf( Foo.allValues )
+
+        assertParseSucceeds( parser, "foo", result: Foo.foo )
+        assertParseSucceeds( parser, "bar", result: Foo.bar )
+        assertParseSucceeds( parser, "baz", result: Foo.baz )
+        assertParseSucceeds( parser, "fooo", result: Foo.foo, consumed: 3 )
+        assertParseFails( parser, "boink" )
+        assertParseFails( parser, "fo" )
+        assertParseFails( parser, "ba" )
+    }
+
+    func testTokens() {
+        enum Foo: String {
+            case foo, bar, baz
+        }
+
+        let parser = tokens( anyOf( [Foo.foo, Foo.bar, Foo.baz] ) )
+
+        var result = try! parse( parser, "\t foo bar baz  ")
+        XCTAssertEqual(result, [Foo.foo, Foo.bar, Foo.baz])
+
+        result = try! parse( parser, "foo" )
+        XCTAssertEqual(result, [Foo.foo])
+
+        result = try! parse( parser, "\n\n\r\n\r   foo    \r\n\r\n\t\r\n" )
+        XCTAssertEqual(result, [Foo.foo])
+
+
+        result = try! parse( parser, "" )
+        XCTAssertEqual(result, [] as [Foo])
+
+        assertParseFails( parser, "foobarbaz" )
+
+        let parser2 = parser <* oneOrMore( digit )
+
+        result = try! parse( parser2, "\t foo bar baz 123")
+        XCTAssertEqual(result, [Foo.foo, Foo.bar, Foo.baz])
+
+        assertParseFails( parser2, "foo bar baz123" )
+    }
 }
 
 extension StringParser_Tests {

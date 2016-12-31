@@ -24,6 +24,14 @@ public func extend (_ a: Character) -> (String) -> String {
     return { b in String(a) + b }
 }
 
+/// Parse one or more whitespace sparated tokens parsed by parser `p`.
+/// 
+/// Example: 
+///     tokens( anyOf( [ "abc", "def", "ghi" ] ) )
+public func tokens<T>( _ p: Parser<Character,T>, separatedBy: Parser<Character,Character> = whitespacesOrNewline ) -> Parser<Character,[T]> {
+    return zeroOrMore(separatedBy) *> ( oneOrMore( p <* ( oneOrMore(separatedBy) ) ) <|> ( count(0...1, p) <* eof() ) )
+}
+
 /** Apply character parser once, then repeat until it fails. Returns a string. */
 public func oneOrMore <T> (_ p: Parser<T, Character>) -> Parser<T, String> {
     return extend <^> p <*> optional( lazy(oneOrMore(p)), otherwise:"" )
@@ -134,6 +142,42 @@ public func char(_ set: CharacterSet, name: String) -> Parser<Character, Charact
  */
 public func parse <A> (_ p: Parser<Character, A>, _ s: String) throws -> A {
     return try (p <* eof()).parse(AnyCollection(s.characters)).output
+}
+
+///
+/// Creates an extended chain of alternate parsers based on the strings specified in `s`.
+public func anyOf<S: Collection>( _ s: S ) -> Parser<Character,String> where S.Iterator.Element == String, S.SubSequence.Iterator.Element == String {
+    if let first = s.first {
+        var p: Parser<Character,String> = string( first )
+
+        for next in s.dropFirst() {
+            p = p <|> string( next )
+        }
+
+        return p
+    } else {
+        return Parser {
+            throw ParseError.Mismatch($0, "nothing expected", String(describing:$0.first))
+        }
+    }
+}
+
+///
+/// Creates an extended chain of alternate parsers based on the representable specified in `s`.
+public func anyOf<S: Collection, E: RawRepresentable>( _ s: S ) -> Parser<Character,E> where S.Iterator.Element == E, S.SubSequence.Iterator.Element == E, E.RawValue == String {
+    if let first = s.first {
+        var p: Parser<Character,E> = representable( string( first.rawValue ) )
+
+        for next in s.dropFirst() {
+            p = p <|> representable( string( next.rawValue ) )
+        }
+        
+        return p
+    } else {
+        return Parser {
+            throw ParseError.Mismatch($0, "nothing expected", String(describing:$0.first))
+        }
+    }
 }
 
 public func print(error: ParseError<Character>, in s: String) {

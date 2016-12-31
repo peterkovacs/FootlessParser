@@ -159,3 +159,48 @@ public func fail <T,A> (_ error: ParseError<T>) -> Parser<T,A> {
 public func parse<A,T>(_ p: Parser<T,A>, _ c: [T]) throws -> A {
     return try ( p <* eof() ).parse(AnyCollection(c)).output
 }
+
+/**
+ Parses a single String RawRepresentable into its represented value.
+
+ ```
+ enum Foo: String {
+ case foo
+ }
+ let p: Parser<Character,Foo> =
+ representable( string( "foo" ) )
+ ```
+
+ - Parameter p: A string parser, that can parse a raw value represented by the type `Repr`.
+ - Returns: A string parser that returns the type specified by `Repr`.
+
+ [Sourcery](https://github.com/krzysztofzablocki/Sourcery) may be helpful to generate an array of values in the enum.
+ */
+public func representable<Repr: RawRepresentable, T, A>( _ p: Parser<T,A> ) -> Parser<T,Repr> where A == Repr.RawValue {
+    return Parser { input in
+        let (repr, remainder) = try p.parse( input )
+        if let value = Repr(rawValue: repr) {
+            return ( value, remainder )
+        } else {
+            throw ParseError.Mismatch(input, String(describing:Repr.self), String(describing:input))
+        }
+    }
+}
+
+/** Creates a chain of alternate parsers based on the elements of collection `s`.  I think this is essentially the same as `oneOf`.
+ */
+public func anyOf<T: Equatable, S: Collection>( _ s: S ) -> Parser<T,T> where S.Iterator.Element == T, S.SubSequence.Iterator.Element == T {
+    if let first = s.first {
+        var p: Parser<T, T> = token( first )
+
+        for next in s.dropFirst() {
+            p = p <|> token( next )
+        }
+
+        return p
+    } else {
+        return Parser {
+            throw ParseError.Mismatch($0, "nothing expected", String( describing: $0.first ))
+        }
+    }
+}
