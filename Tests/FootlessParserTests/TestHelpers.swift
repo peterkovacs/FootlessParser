@@ -37,24 +37,27 @@ extension XCTestCase {
     func assertParsesEqually <T: Equatable, R: Equatable>
         (_ p1: Parser<T,R>, _ p2: Parser<T,R>, input: [T], shouldSucceed: Bool? = nil, file: StaticString = #file, line: UInt = #line) {
 
-        let parse = { (p: Parser<T, R>) -> ((output: R, remainder: AnyCollection<T>)?, String?) in
+        let parse = { (p: Parser<T, R>) -> (R?, Remainder<T>, String?) in
+            var remainder = Remainder(input)
             do {
-                return (try p.parse(AnyCollection(input)), nil)
+                return (try p.parse(&remainder), remainder, nil)
             } catch let error as ParseError<T> {
-                return (nil, error.description)
+                return (nil, remainder, error.description)
             } catch {
-                return (nil, nil)  // should not happen
+                return (nil, remainder, nil)  // should not happen
             }
         }
-        let (r1, r2) = (parse(p1), parse(p2))
-        if r1 != r2 {
+        let r1 = parse(p1)
+        let r2 = parse(p2)
+
+        if r1.0 != r2.0 || r1.1 != r2.1 || r1.2 != r2.2 {
         	return XCTFail("with input '\(input)': '\(r1)' != '\(r2)", file: file, line: line)
         }
 		if let shouldSucceed = shouldSucceed {
 			if shouldSucceed && (r1.0 == nil) {
 				XCTFail("parsing of '\(input)' failed, shoud have succeeded", file: file, line: line)
 			}
-			if !shouldSucceed && (r1.1 == nil) {
+			if !shouldSucceed && (r1.0 != nil) {
 				XCTFail("parsing of '\(input)' succeeded, shoud have failed", file: file, line: line)
 			}
 		}
@@ -65,7 +68,8 @@ extension XCTestCase {
         (_ p: Parser<T,R>, _ input: inout [T], result: R? = nil, consumed: Int? = nil, file: StaticString = #file, line: UInt = #line) {
 
         do {
-            let (output, remainder) = try p.parse(AnyCollection(input))
+            var remainder = Remainder(input)
+            let output = try p.parse(&remainder)
             if let result = result {
                 if output != result {
                     XCTFail("with input '\(input)': output should be '\(result)', was '\(output)'. ", file: file, line: line)
@@ -88,7 +92,8 @@ extension XCTestCase {
 		(_ p: Parser<T,[R]>, _ input: inout [T], result: [R]? = nil, consumed: Int? = nil, file: StaticString = #file, line: UInt = #line) {
 
         do {
-            let (output, remainder) = try p.parse(AnyCollection(input))
+            var remainder = Remainder(input)
+            let output = try p.parse(&remainder)
             if let result = result {
                 if output != result {
                     XCTFail("with input '\(input)': output should be '\(result)', was '\(output)'. ", file: file, line: line)
@@ -136,7 +141,8 @@ extension XCTestCase {
 		(_ p: Parser<T,R>, _ input: T, file: StaticString = #file, line: UInt = #line) {
 
         do {
-            let (output, _) = try p.parse(AnyCollection([input]))
+            var remainder = Remainder([input])
+            let output = try p.parse(&remainder)
             XCTFail("Parsing succeeded with output '\(output)', should have failed.", file: file, line: line)
         } catch {}
 	}
@@ -146,8 +152,9 @@ extension XCTestCase {
 		(_ p: Parser<T,R>, _ input: C, file: StaticString = #file, line: UInt = #line) where C.Iterator.Element == T {
 
         do {
-            let (output, _) = try p.parse(AnyCollection(Array(input)))
-            XCTFail("Parsing succeeded with output '\(output)', should have failed.", file: file, line: line)
+            var remainder = Remainder(input)
+            let output = try p.parse(&remainder)
+            XCTFail("Parsing succeeded with output '\(output)', should have failed. Remainder: \(remainder)", file: file, line: line)
         } catch {}
 	}
 
@@ -155,7 +162,7 @@ extension XCTestCase {
 	func assertParseFails <R>
 		(_ p: Parser<Character,R>, _ input: String, file: StaticString = #file, line: UInt = #line) {
 
-        return assertParseFails(p, Array(input.characters))
+        return assertParseFails(p, Array(input.characters), file: file, line: line)
 	}
 }
 

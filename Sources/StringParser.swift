@@ -20,16 +20,22 @@ public func extend (_ a: String) -> (String) -> String {
 }
 
 /** Join a character with a string. */
+//public func extend (_ a: Character) -> (String) -> String {
+//    return { b in String(a) + b }
+//}
 public func extend (_ a: Character) -> (String) -> String {
-    return { b in String(a) + b }
+    let s = String(a)
+    return { b in
+        return s.appending(b)
+    }
 }
 
 /// Parse one or more whitespace sparated tokens parsed by parser `p`.
 /// 
 /// Example: 
-///     tokens( anyOf( [ "abc", "def", "ghi" ] ) )
-public func tokens<T>( _ p: Parser<Character,T>, separatedBy: Parser<Character,Character> = whitespacesOrNewline ) -> Parser<Character,[T]> {
-    return zeroOrMore(separatedBy) *> ( oneOrMore( p <* ( oneOrMore(separatedBy) ) ) <|> ( count(0...1, p) <* eof() ) )
+///     lexemes( anyOf( [ "abc", "def", "ghi" ] ) )
+public func lexemes<T>( _ p: Parser<Character,T>, separatedBy: Parser<Character,Character> = whitespacesOrNewline ) -> Parser<Character,[T]> {
+    return zeroOrMore(separatedBy) *> (oneOrMore( p <* oneOrMore(separatedBy)) <|> (count(0...1, p) <* eof()))
 }
 
 /** Apply character parser once, then repeat until it fails. Returns a string. */
@@ -44,7 +50,15 @@ public func zeroOrMore <T> (_ p: Parser<T,Character>) -> Parser<T,String> {
 
 /** Repeat character parser 'n' times and return as string. If 'n' == 0 it always succeeds and returns "". */
 public func count <T> (_ n: Int, _ p: Parser<T,Character>) -> Parser<T,String> {
-    return n == 0 ? pure("") : extend <^> p <*> count(n-1, p)
+    return Parser { input in
+        var result = ""
+        var working = input
+        for _ in 0..<n {
+            result.append(String(try p.parse(&working)))
+        }
+        input = working
+        return result
+    }
 }
 
 /**
@@ -78,12 +92,13 @@ public func string (_ s: String) -> Parser<Character, String> {
         guard input.startIndex < input.endIndex else {
             throw ParseError.Mismatch(input, s, "EOF")
         }
-        guard let endIndex = input.index(input.startIndex, offsetBy:Int64(count), limitedBy: input.endIndex) else {
+        guard let endIndex = input.index(input.startIndex, offsetBy:count, limitedBy: input.endIndex) else {
             throw ParseError.Mismatch(input, s, String(input))
         }
         let next = input[input.startIndex..<endIndex]
         if s.characters.elementsEqual(next) {
-            return (s, input.dropFirst(count))
+            input.advance(by: count)
+            return s
         } else {
             throw ParseError.Mismatch(input, s, String(next))
         }
@@ -115,20 +130,24 @@ public func noneOf(_ strings: [String]) -> Parser<Character, Character> {
         }
         for (string, characters) in strings {
             guard characters.first == next else { continue }
-            let offset = Int64(characters.count)
-            guard Int64(input.count) >= offset else { continue }
-            let endIndex = input.index(input.startIndex, offsetBy: offset)
-            guard endIndex <= input.endIndex else { continue }
+            guard let endIndex = input.index(input.startIndex, offsetBy: characters.count, limitedBy: input.endIndex) else { continue }
             let peek = input[input.startIndex..<endIndex]
             if characters.elementsEqual(peek) { throw ParseError.Mismatch(input, "anything but \(string)", string) }
         }
-        return (next, input.dropFirst())
+
+        input.advance(by: 1)
+        return next
     }
 }
 
 public func char(_ set: CharacterSet, name: String) -> Parser<Character, Character> {
-    return satisfy(expect: name) {
-        return String($0).rangeOfCharacter(from: set) != nil
+    return satisfy(expect: name) { c in
+        for i in String(c).unicodeScalars {
+            if set.contains( i ) {
+                return true
+            }
+        }
+        return false
     }
 }
 
@@ -141,7 +160,8 @@ public func char(_ set: CharacterSet, name: String) -> Parser<Character, Charact
  - throws: A ParserError.
  */
 public func parse <A> (_ p: Parser<Character, A>, _ s: String) throws -> A {
-    return try (p <* eof()).parse(AnyCollection(s.characters)).output
+    var input = Remainder(s.characters)
+    return try (p <* eof()).parse(&input)
 }
 
 ///

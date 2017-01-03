@@ -5,8 +5,8 @@ public enum CountError: Error {
 }
 
 
-public enum ParseError<T>: Error {
-    case Mismatch(AnyCollection<T>, String, String)
+public enum ParseError<T: Equatable>: Error {
+    case Mismatch(Remainder<T>, String, String)
 }
 
 extension ParseError: CustomStringConvertible {

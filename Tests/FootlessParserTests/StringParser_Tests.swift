@@ -10,6 +10,23 @@
 import FootlessParser
 import XCTest
 
+
+enum Token: String {
+    case foo, bar, baz
+
+    static let allValues: [Token] = [ .foo, .bar, .baz ]
+}
+
+extension Token: CustomStringConvertible, CustomDebugStringConvertible {
+    var description: String {
+        return rawValue
+    }
+
+    var debugDescription: String {
+        return self.description
+    }
+}
+
 class StringParser_Tests: XCTestCase {
 
 	func testCharParser () {
@@ -26,7 +43,7 @@ class StringParser_Tests: XCTestCase {
     let input = "AB"
     let parser = zeroOrMore(noneOf(["BC"]))
 		// fatal error: cannot increment beyond endIndex
-    let _ = try! parser.parse(AnyCollection(input.characters))
+    let _ = try! parse(parser, input.characters)
 		assertParseSucceeds(parser, input, result: "AB")
   }
 
@@ -86,54 +103,47 @@ class StringParser_Tests: XCTestCase {
         assertParseFails(parser, "")
     }
 
+
     func testRepresentable() {
-        enum Foo: String {
-            case foo, bar, baz
-            static let allValues: [Foo] = [ .foo, .bar, .baz ]
-        }
+        let parser: Parser<Character,Token> = anyOf( Token.allValues )
 
-        let parser: Parser<Character,Foo> = anyOf( Foo.allValues )
-
-        assertParseSucceeds( parser, "foo", result: Foo.foo )
-        assertParseSucceeds( parser, "bar", result: Foo.bar )
-        assertParseSucceeds( parser, "baz", result: Foo.baz )
-        assertParseSucceeds( parser, "fooo", result: Foo.foo, consumed: 3 )
+        assertParseSucceeds( parser, "foo", result: Token.foo )
+        assertParseSucceeds( parser, "bar", result: Token.bar )
+        assertParseSucceeds( parser, "baz", result: Token.baz )
+        assertParseSucceeds( parser, "fooo", result: Token.foo, consumed: 3 )
         assertParseFails( parser, "boink" )
         assertParseFails( parser, "fo" )
         assertParseFails( parser, "ba" )
     }
 
-    func testTokens() {
-        enum Foo: String {
-            case foo, bar, baz
-        }
+    func testLexemes() {
 
-        let parser = tokens( anyOf( [Foo.foo, Foo.bar, Foo.baz] ) )
+        let parser = lexemes( anyOf( Token.allValues ) )
 
         var result = try! parse( parser, "\t foo bar baz  ")
-        XCTAssertEqual(result, [Foo.foo, Foo.bar, Foo.baz])
+        XCTAssertEqual(result, [Token.foo, Token.bar, Token.baz])
 
         result = try! parse( parser, "foo" )
-        XCTAssertEqual(result, [Foo.foo])
+        XCTAssertEqual(result, [Token.foo])
 
         result = try! parse( parser, "\n\n\r\n\r   foo    \r\n\r\n\t\r\n" )
-        XCTAssertEqual(result, [Foo.foo])
+        XCTAssertEqual(result, [Token.foo])
 
 
         result = try! parse( parser, "" )
-        XCTAssertEqual(result, [] as [Foo])
+        XCTAssertEqual(result, [] as [Token])
 
         assertParseFails( parser, "foobarbaz" )
 
         let parser2 = parser <* oneOrMore( digit )
 
         result = try! parse( parser2, "\t foo bar baz 123")
-        XCTAssertEqual(result, [Foo.foo, Foo.bar, Foo.baz])
+        XCTAssertEqual(result, [Token.foo, Token.bar, Token.baz])
 
         assertParseFails( parser2, "foo bar baz123" )
+
     }
 }
-
 extension StringParser_Tests {
 	public static var allTests = [
 		("testCharParser", testCharParser),

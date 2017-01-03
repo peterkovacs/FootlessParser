@@ -1,4 +1,4 @@
-precedencegroup ApplyGroup { 
+precedencegroup ApplyGroup {
   associativity: right 
   higherThan: ComparisonPrecedence
 }
@@ -25,8 +25,10 @@ infix operator >>-: FlatMapGroup
  */
 public func >>- <T,A,B> (p: Parser<T,A>, f: @escaping (A) throws -> Parser<T,B>) -> Parser<T,B> {
     return Parser { input in
-        let result = try p.parse(input)
-        return try f(result.output).parse(result.remainder)
+        var working = input
+        let result = try f(try p.parse(&working)).parse(&working)
+        input = working
+        return result
     }
 }
 
@@ -43,8 +45,8 @@ infix operator <^>: MapApplyGroup
  */
 public func <^> <T,A,B> (f: @escaping (A) throws -> B, p: Parser<T,A>) -> Parser<T,B> {
     return Parser { input in
-        let result = try p.parse(input)
-        return (try f(result.output), result.remainder)
+        let result = try p.parse(&input)
+        return try f(result)
     }
 }
 
@@ -101,7 +103,7 @@ public func *> <T,A,B> (p1: Parser<T,A>, p2: Parser<T,B>) -> Parser<T,B> {
  - parameter a: A value of type A
  */
 public func pure <T,A> (_ a: A) -> Parser<T,A> {
-    return Parser { input in (a, input) }
+    return Parser { _ in a }
 }
 
 
@@ -119,10 +121,16 @@ infix operator <|>: ApplyGroup
 public func <|> <T,A> (l: Parser<T,A>, r: Parser<T,A>) -> Parser<T,A> {
     return Parser { input in
         do {
-            return try l.parse(input)
+            var left = input
+            let result = try l.parse(&left)
+            input = left
+            return result
         } catch ParseError<T>.Mismatch(let lr, let le, let la) {
             do {
-                return try r.parse(input)
+                var right = input
+                let result = try r.parse(&right)
+                input = right
+                return result
             } catch ParseError<T>.Mismatch(let rr, let re, let ra) {
                 if lr.count <= rr.count {
                     throw ParseError.Mismatch(lr, le, la)

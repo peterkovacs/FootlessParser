@@ -1,6 +1,22 @@
-// would've liked a generic typealias here.
-public struct Parser<Token, Output> {
-    public typealias ParseFunction = (AnyCollection<Token>) throws -> (output: Output, remainder: AnyCollection<Token>)
+//
+// Parser.swift
+// FootlessParser
+//
+// Released under the MIT License (MIT), http://opensource.org/licenses/MIT
+//
+// Copyright (c) 2015 NotTooBad Software. All rights reserved.
+//
+
+public struct Remainder<Token: Equatable> {
+    typealias Data = Array<Token>
+    let original: Data
+    var position: Data.Index
+    public let endIndex: Data.Index
+
+}
+
+public struct Parser<Token: Equatable, Output> {
+    public typealias ParseFunction = (inout Remainder<Token>) throws -> Output
     public let parse: ParseFunction
 
     public init( parse: @escaping ParseFunction ) {
@@ -8,12 +24,168 @@ public struct Parser<Token, Output> {
     }
 }
 
+public extension Parser {
+    public func map<B>( _ f: @escaping (Output) -> B ) -> Parser<Token,B> {
+        return Parser<Token,B> { input in
+            let result = try self.parse(&input)
+            return f(result)
+        }
+    }
+
+    public func flatMap<B>( _ f: @escaping (Output) -> Parser<Token,B> ) -> Parser<Token,B> {
+        return Parser<Token,B> { input in
+            let result = try self.parse(&input)
+            return try f(result).parse(&input)
+        }
+    }
+
+    public func between<P1, P2>( _ p1: Parser<Token, P1>, _ p2: Parser< Token, P2 > ) -> Parser<Token,Output> {
+        return ( p1 *> self <* p2 )
+    }
+
+    init<P1, P2>( lift f: @escaping (P1, P2) -> Output, _ p1: Parser<Token,P1>, _ p2: Parser<Token, P2> ) {
+        self.parse = { input in
+            let original = input
+            do {
+                let a = try p1.parse(&input)
+                let b = try p2.parse(&input)
+
+                return f(a, b)
+            } catch {
+                input = original
+                throw error
+            }
+        }
+    }
+
+    init<P1, P2, P3>( lift f: @escaping (P1, P2, P3) -> Output, _ p1: Parser<Token,P1>, _ p2: Parser<Token, P2>, _ p3: Parser<Token, P3> ) {
+        self.parse = { input in
+            let original = input
+            do {
+                let a = try p1.parse(&input)
+                let b = try p2.parse(&input)
+                let c = try p3.parse(&input)
+
+                return f(a, b, c)
+            } catch {
+                input = original
+                throw error
+            }
+        }
+    }
+
+    init<P1, P2, P3, P4>( lift f: @escaping (P1, P2, P3, P4) -> Output, _ p1: Parser<Token,P1>, _ p2: Parser<Token, P2>, _ p3: Parser<Token, P3>, _ p4: Parser<Token, P4>) {
+        self.parse = { input in
+            let original = input
+            do {
+                let a = try p1.parse(&input)
+                let b = try p2.parse(&input)
+                let c = try p3.parse(&input)
+                let d = try p4.parse(&input)
+
+                return f(a, b, c, d)
+            } catch {
+                input = original
+                throw error
+            }
+        }
+    }
+
+    init<P1, P2, P3, P4, P5>( lift f: @escaping (P1, P2, P3, P4, P5) -> Output, _ p1: Parser<Token,P1>, _ p2: Parser<Token, P2>, _ p3: Parser<Token, P3>, _ p4: Parser<Token, P4>, _ p5: Parser<Token, P5> ) {
+        self.parse = { input in
+            let original = input
+            do {
+                let a = try p1.parse(&input)
+                let b = try p2.parse(&input)
+                let c = try p3.parse(&input)
+                let d = try p4.parse(&input)
+                let e = try p5.parse(&input)
+                
+                return f(a, b, c, d, e)
+            } catch {
+                input = original
+                throw error
+            }
+        }
+    }
+}
+
+public extension Remainder {
+    public init<T: Collection>( _ collection: T ) where T.Iterator.Element == Token {
+        original = Array(collection)
+        position = original.startIndex
+        endIndex = original.endIndex
+    }
+
+     public mutating func scan() -> Token? {
+        return scan { _ in true }
+    }
+
+    public mutating func peek() -> Token? {
+        guard position < endIndex else { return nil }
+        return original[position]
+    }
+
+    public mutating func scan( condition: (Token) -> Bool ) -> Token? {
+        guard let result = peek(), condition(result) else { return nil }
+        defer { position = index( after: position ) }
+        return result
+    }
+}
+
+extension Remainder: CustomStringConvertible {
+    public var description: String {
+        return String(describing: original[position..<endIndex])
+    }
+}
+
+extension Remainder: Collection {
+    public typealias Index = Array<Token>.Index
+
+    public mutating func next() -> Token? {
+        guard position < endIndex else { return nil }
+        defer { position = original.index( after: position ) }
+        return original[position]
+    }
+
+    public var startIndex: Index { return position }
+
+    public subscript(index: Index) -> Token {
+        return original[index]
+    }
+    public subscript(index: Range<Index>) -> Remainder {
+      return Remainder( original[index] )
+    }
+    public subscript(index: ClosedRange<Index>) -> Remainder {
+      return Remainder( original[index] )
+    }
+
+    public func index( after i: Index ) -> Index {
+        return original.index(after: i)
+    }
+
+    public func index(_ i: Int, offsetBy n: Int, limitedBy limit: Int) -> Int? {
+        return original.index(i, offsetBy: n, limitedBy: limit)
+    }
+
+    public mutating func advance(by: Int = 1) {
+        position = original.index(position, offsetBy: by, limitedBy: endIndex) ?? endIndex
+    }
+}
+
+extension Remainder: Equatable {
+    public static func ==(lhs: Remainder<Token>, rhs: Remainder<Token> ) -> Bool {
+        return lhs.count == rhs.count && lhs.original.elementsEqual(rhs.original)
+    }
+}
+
 public func satisfy<T>
     (expect: @autoclosure @escaping () -> String, condition: @escaping (T) -> Bool) -> Parser<T, T> {
-    return Parser { input in
+    return Parser { (input: inout Remainder) in
         if let next = input.first {
             if condition(next) {
-                return (next, input.dropFirst())
+                input.advance(by: 1)
+                return next
             } else {
                 throw ParseError.Mismatch(input, expect(), String(describing:next))
             }
@@ -31,7 +203,11 @@ public func token<T: Equatable>(_ token: T) -> Parser<T, T> {
 public func tokens <T: Equatable, C: Collection> (_ xs: C) -> Parser<T,C> where C.Iterator.Element == T, C.IndexDistance == Int {
     let length = xs.count
     return count(length, any()) >>- { parsedtokens in
-        return parsedtokens.elementsEqual(xs) ? pure(xs) : fail(.Mismatch(AnyCollection(parsedtokens), String(describing:xs), String(describing:parsedtokens)))
+        if parsedtokens.elementsEqual(xs) {
+            return pure( xs )
+        } else {
+            return fail( .Mismatch(Remainder(parsedtokens), String(describing:xs), String(describing: parsedtokens)) )
+        }
     }
 }
 
@@ -49,31 +225,29 @@ public func optional <T,A> (_ p: Parser<T,A>, otherwise: A) -> Parser<T,A> {
 public func optional <T,A> (_ p: Parser<T, A>) -> Parser<T, A?> {
     return Parser { input in
         do {
-            let (result, remainder) = try p.parse(input)
-            return (result, remainder)
+            return try p.parse(&input)
         } catch is ParseError<T> {
-            return (nil, input)
+            return nil
         }
     }
 }
 
 /** Delay creation of parser until it is needed. */
 public func lazy <T,A> (_ f: @autoclosure @escaping () -> Parser<T,A>) -> Parser<T,A> {
-    return Parser { input in try f().parse(input) }
+    return Parser { input in try f().parse(&input) }
 }
 
 /** Apply parser once, then repeat until it fails. Returns an array of the results. */
 public func oneOrMore <T,A> (_ p: Parser<T,A>) -> Parser<T,[A]> {
     return Parser { input in
-        var (first, remainder) = try p.parse(input)
+        let first = try p.parse(&input)
         var result = [first]
         while true {
             do {
-                let next = try p.parse(remainder)
-                result.append(next.output)
-                remainder = next.remainder
+                let next = try p.parse(&input)
+                result.append(next)
             } catch {
-                return (result, remainder)
+                return result
             }
         }
     }
@@ -87,14 +261,13 @@ public func zeroOrMore <T,A> (_ p: Parser<T,A>) -> Parser<T,[A]> {
 /** Repeat parser 'n' times. If 'n' == 0 it always succeeds and returns []. */
 public func count <T,A> (_ n: Int, _ p: Parser<T,A>) -> Parser<T,[A]> {
     return Parser { input in
-        var input = input
+        var working = input
         var results = [A]()
         for _ in 0..<n {
-            let (result, remainder) = try p.parse(input)
-            results.append(result)
-            input = remainder
+            results.append(try p.parse(&working))
         }
-        return (results, input)
+        input = working
+        return results
     }
 }
 
@@ -136,10 +309,10 @@ public func not <T: Equatable> (_ token: T) -> Parser<T,T> {
 /** Verify that input is empty. */
 public func eof <T> () -> Parser<T,()> {
     return Parser { input in
-        if let next = input.first {
-            throw ParseError.Mismatch(input, "EOF", String(describing:next))
+        if !input.isEmpty {
+            throw ParseError.Mismatch(input, "EOF", String(describing:input))
         }
-        return ((), input)
+        return ()
     }
 }
 
@@ -156,8 +329,9 @@ public func fail <T,A> (_ error: ParseError<T>) -> Parser<T,A> {
  - returns: Output from the parser.
  - throws: ParserError.
  */
-public func parse<A,T>(_ p: Parser<T,A>, _ c: [T]) throws -> A {
-    return try ( p <* eof() ).parse(AnyCollection(c)).output
+public func parse<A,T,C: Collection>(_ p: Parser<T,A>, _ c: C) throws -> A where T == C.Iterator.Element {
+    var input = Remainder( c )
+    return try ( p <* eof() ).parse(&input)
 }
 
 /**
@@ -178,13 +352,17 @@ public func parse<A,T>(_ p: Parser<T,A>, _ c: [T]) throws -> A {
  */
 public func representable<Repr: RawRepresentable, T, A>( _ p: Parser<T,A> ) -> Parser<T,Repr> where A == Repr.RawValue {
     return Parser { input in
-        let (repr, remainder) = try p.parse( input )
+        let repr = try p.parse( &input )
         if let value = Repr(rawValue: repr) {
-            return ( value, remainder )
+            return value
         } else {
             throw ParseError.Mismatch(input, String(describing:Repr.self), String(describing:input))
         }
     }
+}
+
+public func anyOf<Token: Equatable, Output, S: Collection>( _ s: S ) -> Parser<Token, Output> where S.Iterator.Element == Parser<Token,Output> {
+    return s.reduce( fail(.Mismatch(Remainder([]), "", "")), <|> )
 }
 
 /** Creates a chain of alternate parsers based on the elements of collection `s`.  I think this is essentially the same as `oneOf`.
