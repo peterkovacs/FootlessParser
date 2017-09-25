@@ -8,7 +8,7 @@
 //
 
 public struct Remainder<Token: Equatable> {
-    typealias Data = Array<Token>
+    public typealias Data = Array<Token>
     let original: Data
     var position: Data.Index
     public let endIndex: Data.Index
@@ -361,13 +361,13 @@ public func representable<Repr: RawRepresentable, T, A>( _ p: Parser<T,A> ) -> P
     }
 }
 
-public func anyOf<Token: Equatable, Output, S: Collection>( _ s: S ) -> Parser<Token, Output> where S.Iterator.Element == Parser<Token,Output> {
+public func anyOf<Token, Output, S: Collection>( _ s: S ) -> Parser<Token, Output> where S.Iterator.Element == Parser<Token,Output> {
     return s.reduce( fail(.Mismatch(Remainder([]), "", "")), <|> )
 }
 
 /** Creates a chain of alternate parsers based on the elements of collection `s`.  I think this is essentially the same as `oneOf`.
  */
-public func anyOf<T: Equatable, S: Collection>( _ s: S ) -> Parser<T,T> where S.Iterator.Element == T, S.SubSequence.Iterator.Element == T {
+public func anyOf<T, S: Collection>( _ s: S ) -> Parser<T,T> where S.Iterator.Element == T {
     if let first = s.first {
         var p: Parser<T, T> = token( first )
 

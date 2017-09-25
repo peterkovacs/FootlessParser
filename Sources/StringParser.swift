@@ -166,7 +166,7 @@ public func parse <A> (_ p: Parser<Character, A>, _ s: String) throws -> A {
 
 ///
 /// Creates an extended chain of alternate parsers based on the strings specified in `s`.
-public func anyOf<S: Collection>( _ s: S ) -> Parser<Character,String> where S.Iterator.Element == String, S.SubSequence.Iterator.Element == String {
+public func anyOf<S: Collection>( _ s: S ) -> Parser<Character,String> where S.Iterator.Element == String {
     if let first = s.first {
         var p: Parser<Character,String> = string( first )
 
@@ -184,7 +184,7 @@ public func anyOf<S: Collection>( _ s: S ) -> Parser<Character,String> where S.I
 
 ///
 /// Creates an extended chain of alternate parsers based on the representable specified in `s`.
-public func anyOf<S: Collection, E: RawRepresentable>( _ s: S ) -> Parser<Character,E> where S.Iterator.Element == E, S.SubSequence.Iterator.Element == E, E.RawValue == String {
+public func anyOf<S: Collection, E: RawRepresentable>( _ s: S ) -> Parser<Character,E> where S.Iterator.Element == E, E.RawValue == String {
     if let first = s.first {
         var p: Parser<Character,E> = representable( string( first.rawValue ) )
 
