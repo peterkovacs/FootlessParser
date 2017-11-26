@@ -87,7 +87,7 @@ public func count <T> (_ r: Range<Int>, _ p: Parser<T,Character>) -> Parser<T,St
  - note: consumes either the full string or nothing, even on a partial match.
  */
 public func string (_ s: String) -> Parser<Character, String> {
-    let count = s.characters.count
+    let count = s.count
     return Parser { input in
         guard input.startIndex < input.endIndex else {
             throw ParseError.Mismatch(input, s, "EOF")
@@ -96,7 +96,7 @@ public func string (_ s: String) -> Parser<Character, String> {
             throw ParseError.Mismatch(input, s, String(input))
         }
         let next = input[input.startIndex..<endIndex]
-        if s.characters.elementsEqual(next) {
+        if s.elementsEqual(next) {
             input.advance(by: count)
             return s
         } else {
@@ -108,31 +108,29 @@ public func string (_ s: String) -> Parser<Character, String> {
 
 /** Succeed if the next character is in the provided string. */
 public func oneOf (_ s: String) -> Parser<Character,Character> {
-    return oneOf(s.characters)
+    return oneOf(Set(s))
 }
 
 /** Succeed if the next character is _not_ in the provided string. */
 public func noneOf (_ s: String) -> Parser<Character,Character> {
-    return noneOf(s.characters)
+    return noneOf(Set(s))
 }
 
 /**
- Produces a character if the character and succeeding to not match any of the
- strings.
+ Produces a character if the character and succeeding do not match any of the strings.
  - parameter: strings to _not_ match
  - note: consumes only produced characters
  */
 public func noneOf(_ strings: [String]) -> Parser<Character, Character> {
-    let strings = strings.map { ($0, $0.characters) }
     return Parser { input in
         guard let next = input.first else {
             throw ParseError.Mismatch(input, "anything but \(strings)", "EOF")
         }
-        for (string, characters) in strings {
-            guard characters.first == next else { continue }
-            guard let endIndex = input.index(input.startIndex, offsetBy: characters.count, limitedBy: input.endIndex) else { continue }
+        for string in strings {
+            guard string.first == next else { continue }
+            guard let endIndex = input.index(input.startIndex, offsetBy: string.count, limitedBy: input.endIndex) else { continue }
             let peek = input[input.startIndex..<endIndex]
-            if characters.elementsEqual(peek) { throw ParseError.Mismatch(input, "anything but \(string)", string) }
+            if string.elementsEqual(peek) { throw ParseError.Mismatch(input, "anything but \(string)", string) }
         }
 
         input.advance(by: 1)
@@ -160,7 +158,7 @@ public func char(_ set: CharacterSet, name: String) -> Parser<Character, Charact
  - throws: A ParserError.
  */
 public func parse <A> (_ p: Parser<Character, A>, _ s: String) throws -> A {
-    var input = Remainder(s.characters)
+    var input = Remainder(s)
     return try (p <* eof()).parse(&input)
 }
 
@@ -213,7 +211,7 @@ public func print(error: ParseError<Character>, in s: String) {
     }
 }
 
-func position(of index: String.CharacterView.Index, in string: String) -> (line: Range<String.CharacterView.Index>, row: Int, pos: Int) {
+func position(of index: Substring.Index, in string: String) -> (line: Range<Substring.Index>, row: Int, pos: Int) {
     var head = string.startIndex..<string.startIndex
     var row = 0
     while head.upperBound <= index {

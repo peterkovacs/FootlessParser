@@ -32,20 +32,20 @@ class StringParser_Tests: XCTestCase {
 	func testCharParser () {
 		let parser = char("a")
 
-		var input = Array("a".characters)
+		var input = Array("a")
 
 		assertParseFails(parser, "b")
 		assertParseSucceeds(parser, &input, result: "a")
 		XCTAssert(input == [], "Input should be empty")
 	}
 
-  func testOffsetForNoneOf () {
-    let input = "AB"
-    let parser = zeroOrMore(noneOf(["BC"]))
+	func testOffsetForNoneOf () {
+		let input = "AB"
+		let parser = zeroOrMore(noneOf(["BC"]))
 		// fatal error: cannot increment beyond endIndex
-    let _ = try! parse(parser, input.characters)
+                let _ = try! parse(parser, input)
 		assertParseSucceeds(parser, input, result: "AB")
-  }
+	}
 
 	func testOneOrMoreParserForCharacters () {
 		let parser = oneOrMore(char("a"))
