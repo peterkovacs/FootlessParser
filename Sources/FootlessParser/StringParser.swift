@@ -40,7 +40,7 @@ public func lexemes<T>( _ p: Parser<Character,T>, separatedBy: Parser<Character,
 
 /** Apply character parser once, then repeat until it fails. Returns a string. */
 public func oneOrMore <T> (_ p: Parser<T, Character>) -> Parser<T, String> {
-    return extend <^> p <*> optional( lazy(oneOrMore(p)), otherwise:"" )
+    return { (cs: [Character]) in String(cs) } <^> oneOrMore(p)
 }
 
 /** Repeat character parser until it fails. Returns a string. */
@@ -92,7 +92,7 @@ public func string (_ s: String) -> Parser<Character, String> {
         guard input.startIndex < input.endIndex else {
             throw ParseError.Mismatch(input, s, "EOF")
         }
-        guard let endIndex = input.index(input.startIndex, offsetBy:count, limitedBy: input.endIndex) else {
+        guard let endIndex = input.index(input.startIndex, offsetBy: count, limitedBy: input.endIndex) else {
             throw ParseError.Mismatch(input, s, String(input))
         }
         let next = input[input.startIndex..<endIndex]
@@ -128,7 +128,10 @@ public func noneOf(_ strings: [String]) -> Parser<Character, Character> {
         }
         for string in strings {
             guard string.first == next else { continue }
-            guard let endIndex = input.index(input.startIndex, offsetBy: string.count, limitedBy: input.endIndex) else { continue }
+            let offset = string.count
+            guard input.count >= offset else { continue }
+            let endIndex = input.index(input.startIndex, offsetBy: offset)
+            guard endIndex <= input.endIndex else { continue }
             let peek = input[input.startIndex..<endIndex]
             if string.elementsEqual(peek) { throw ParseError.Mismatch(input, "anything but \(string)", string) }
         }
@@ -200,7 +203,7 @@ public func anyOf<S: Collection, E: RawRepresentable>( _ s: S ) -> Parser<Charac
 
 public func print(error: ParseError<Character>, in s: String) {
     if case ParseError<Character>.Mismatch(let remainder, let expected, let actual) = error {
-        let index = s.index(s.endIndex, offsetBy: -Int(remainder.count))
+        let index = s.index(s.endIndex, offsetBy: -remainder.count)
         let (lineRange, row, pos) = position(of: index, in: s)
         let line = s[lineRange.lowerBound..<lineRange.upperBound].trimmingCharacters(in: CharacterSet.newlines)
 
